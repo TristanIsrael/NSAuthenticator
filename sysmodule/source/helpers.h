@@ -1,0 +1,46 @@
+#pragma once
+#include <string>
+#include <switch.h>
+
+namespace alefbet::authenticator {
+
+    using UserUid = std::string;
+    using UserNickname = std::string;
+
+    namespace structs {
+
+        struct UserData {
+            AccountUid uid;
+            UserNickname nickname;
+
+            bool isValid() const {
+                return accountUidIsValid(&uid) && nickname.substr(0, 4) != "ERR#";
+            }
+
+            bool operator==(const UserData& other) const {
+                return uid.uid[0] == other.uid.uid[0] && uid.uid[1] == other.uid.uid[1];
+            }
+
+        };
+
+    }
+
+    namespace helpers {        
+        std::string titleIdToString(u64 titleId);
+        UserUid accountUidToString(AccountUid uid);
+        AccountUid accountUidFromString(const UserUid& uid);
+
+        structs::UserData getCurrentUser();
+        structs::UserData getUserFromAccountUid(AccountUid uid);
+        u64 getRunningApplicationPid();
+        u64 getRunningApplicationTitleId(u64 process_id);
+        std::string getApplicationName(u64 title_id);
+
+        std::string today();
+
+        //bool shutdown();
+        #ifdef CAN_REBOOT_TO_PAYLOAD
+        bool rebootToPayload();
+        #endif
+    }
+}   

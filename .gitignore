@@ -39,3 +39,21 @@
 
 # debug information files
 *.dwo
+
+
+# build dirs
+build/
+out/
+out.nosync/
+build.nosync/
+
+# binaries
+*.nsp
+*.nso
+*.elf
+*.ovl
+*.nacp
+*.log
+*.npdm
+
+.DS_Store
