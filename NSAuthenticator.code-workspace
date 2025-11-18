@@ -5,7 +5,14 @@
         },
         {
             "path": "../NSParentalControl"
+        },
+        {
+            "path": "../TriPlayer"
         }
     ],
-    "settings": {}
+    "settings": {
+        "files.associations": {
+            "valarray": "cpp"
+        }
+    }
 }

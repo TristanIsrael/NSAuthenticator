@@ -18,9 +18,13 @@ namespace alefbet::authenticator::srv {
             } 
 
         private:
+            void handleRunningApp(u64 pid);
+
+        private:
             bool running_ = false;
             u64 currentTitle_ = 0;
             UserData currentUser_;
+            bool firstStart_ = true;
     };    
 
 };

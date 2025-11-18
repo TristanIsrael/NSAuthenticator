@@ -8,8 +8,7 @@ using namespace std::chrono;
 using namespace alefbet::authenticator::logger;
 using namespace alefbet::authenticator::helpers;
 
-constexpr seconds MainLoopDelayInSeconds = 30s;
-constexpr nanoseconds MainLoopDelayInNanos = duration_cast<nanoseconds>(MainLoopDelayInSeconds);
+constexpr s64 MainLoopDelayInNanos = 30'000'000'000; // 30 seconds
 
 namespace alefbet::authenticator::srv {
 
@@ -29,35 +28,36 @@ namespace alefbet::authenticator::srv {
         currentTitle_ = 0;
         currentUser_ = UserData{};
 
+        logToFile("[Monitor] Monitoring loop has started\n");
+
         while(true) {
+            logToFile("[Monitor] begin loop\n");
+
             if(!running_) {
-                //Do nothing
-                svcSleepThread(1000*500); // Wait for 500ms
+                // Do nothing
+                svcSleepThread(500'000'000); // Wait for 500 ms
                 continue;
+            }                    
+
+            if(firstStart_) {
+                // On the first start we wait for 30 seconds
+                svcSleepThread(MainLoopDelayInNanos);
+                firstStart_ = false;
             }
-            
-            logToFile("[Monitor] Monitoring loop has started\n");
 
             const auto& currentAppPid = getRunningApplicationPid();
-            const auto& currentTitle = getRunningApplicationTitleId(currentAppPid);
-            const auto& currentUser = getCurrentUser();            
-
-            if(currentTitle != currentTitle_ && currentUser != currentUser_) {
-                currentTitle_ = currentTitle;
-                currentUser_ = currentUser;
-
-                // Verify whether a game has been closed
-                if(currentTitle == 0) {
+            if(currentAppPid != 0) {
+                handleRunningApp(currentAppPid);
+            } else {
+                // The app has been closed?
+                if(currentTitle_ > 0) {
                     logToFile("[Monitor] The game has been closed");
-                    
-                } else { // Otherwise react
-                    logToFile("[Monitor] The current game and/or user has changed\n");
-
+                    currentTitle_ = 0;
+                    currentUser_.clear();
                 }
             }
-            
-            logToFile("[Monitoring] loop\n");
-            svcSleepThread(MainLoopDelayInNanos.count()); //Wait
+                          
+            svcSleepThread(MainLoopDelayInNanos); //Wait            
         }
 
         logToFile("[Monitor] Stopped monitoring.\n");
@@ -68,4 +68,18 @@ namespace alefbet::authenticator::srv {
         running_ = false;
     }
 
+    void Monitor::handleRunningApp(u64 pid) {
+        logToFile("[Monitor] handle running app %i\n", pid);
+
+        const auto& currentTitle = getRunningApplicationTitleId(pid);
+        const auto& currentUser = getCurrentUser();
+
+        if(currentTitle != currentTitle_ && currentUser != currentUser_) {
+            currentTitle_ = currentTitle;
+            currentUser_ = currentUser;
+
+            logToFile("[Monitor] The current game and/or user has changed\n");
+            
+        }
+    }
 }

@@ -14,7 +14,7 @@ using namespace alefbet::authenticator::logger;
 extern "C" {
 #endif
 
-    constexpr size_t TotalHeapSize = ams::util::AlignUp(6_MB, ams::os::MemoryHeapUnitSize);
+    constexpr size_t TotalHeapSize = ams::util::AlignUp(1_MB, ams::os::MemoryHeapUnitSize);
 
     constexpr size_t ThreadMonitorStackRequiredSizeBytes = ams::util::AlignUp(256_KB, 128);
     constexpr size_t ThreadMonitorStackRequiredSizeAligned = ams::util::AlignUp(ThreadMonitorStackRequiredSizeBytes, ams::os::MemoryPageSize);
@@ -33,6 +33,7 @@ extern "C" {
         extern char* fake_heap_start;
         extern char* fake_heap_end;        
         void* addr = nullptr;
+
         Result rc = svcSetHeapSize(&addr, TotalHeapSize);
         if(R_SUCCEEDED(rc)) {
             fake_heap_start = (char*)addr;
@@ -60,21 +61,9 @@ extern "C" {
         rc = fsInitialize();
         if (R_FAILED(rc))
             fatalThrow(MAKERESULT(Module_HomebrewLoader, 2));
-
-        
-        if (hosversionAtLeast(16,0,0)) {
-            plInitialize(PlServiceType_User);
-        } else {
-            plInitialize(PlServiceType_System);
-        }
-
-        i2cInitialize();
-        bpcInitialize();
-        hidInitialize();
-        hidsysInitialize();
+                                        
         pmdmntInitialize();
-        nsInitialize();
-        smExit();
+        nsInitialize();        
     }
 
     void __wrap_exit(void)
@@ -103,18 +92,18 @@ extern "C" {
             }            
         } */
     }
-
-
 }
 
 namespace alefbet::authenticator {
 
     void startMonitor(void* args) {
-        void** _args = (void**)args;
-        alefbet::authenticator::srv::Monitor* monitor = static_cast<alefbet::authenticator::srv::Monitor*>(_args[0]);
-
+        alefbet::authenticator::srv::Monitor* monitor = new alefbet::authenticator::srv::Monitor;
         logToFile("@monitor=%p\n", monitor);
 
+        // Start monitoring
+        monitor->start();
+
+        // Start loop
         monitor->loop();
     }
 
@@ -130,13 +119,11 @@ int main(int argc, char **argv)
 
     //testMemory();
 
-    ::Result rc = 0;
-    
+    ::Result rc = 0;    
+
     // Start the monitor        
-    Thread threadMonitor;
-    alefbet::authenticator::srv::Monitor* monitor = new alefbet::authenticator::srv::Monitor();
-    void* monitorArgs[1] { monitor };
-    rc = threadCreate(&threadMonitor, alefbet::authenticator::startMonitor, &monitorArgs, g_thread_monitor_memory, ThreadMonitorStackRequiredSizeAligned, 0x2c, -2);
+    Thread threadMonitor;    
+    rc = threadCreate(&threadMonitor, alefbet::authenticator::startMonitor, NULL, g_thread_monitor_memory, ThreadMonitorStackRequiredSizeAligned, 0x2c, -2);
     if(R_FAILED(rc)) {
         logToFile("Could not create the monitor thread, error %i:%i.\n", R_MODULE(rc), R_DESCRIPTION(rc));
         return 4;
@@ -146,17 +133,12 @@ int main(int argc, char **argv)
         logToFile("Could not start the monitor thread, error %i:%i.\n", R_MODULE(rc), R_DESCRIPTION(rc));
         return 5;
     }
-
-    // Start monitoring
-    monitor->start(); 
     
     rc = threadWaitForExit(&threadMonitor);
     if(R_FAILED(rc)) {
         logToFile("Could not wait for the monitor thread to end, error %i:%i.\n", R_MODULE(rc), R_DESCRIPTION(rc));
         return 7;
     }
-
-    delete monitor;
 
     logToFile("[Main] Authenticator ended\n");
 
