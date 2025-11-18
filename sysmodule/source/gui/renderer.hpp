@@ -76,6 +76,8 @@ namespace alefbet {
                         setExit();
                         smExit();
 
+                        logToFile("[Renderer] Result=%i:%i\n", R_MODULE(rc), R_DESCRIPTION(rc));
+
                         this->m_initialized = true;
                     }        
 

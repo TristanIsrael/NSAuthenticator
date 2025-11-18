@@ -16,3 +16,9 @@ The authentication is sometimes necessary to protect its content from other game
 - The first time a profile is used, the authenticator window is shown and asks the user to **create** its personal code.
 - The next time the profile is used, the authenticator window is show and asks the user to **verify** its personal code.
   - If the code entered is wrong the game is stopped.
+
+## Credits
+
+- Niels Lohmann <https://nlohmann.me> for JSON C++ library
+- @SciresM for Atmosphère
+- Sean Barrett for STB Truetype

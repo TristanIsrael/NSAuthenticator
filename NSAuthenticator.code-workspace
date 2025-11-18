@@ -12,7 +12,9 @@
     ],
     "settings": {
         "files.associations": {
-            "valarray": "cpp"
+            "valarray": "cpp",
+            "map": "cpp",
+            "string": "cpp"
         }
     }
 }

@@ -21,7 +21,7 @@ namespace alefbet::authenticator {
                 return uid.uid[0] == other.uid.uid[0] && uid.uid[1] == other.uid.uid[1];
             }
 
-            bool clear() {
+            void clear() {
                 uid.uid[0] = 0;
                 uid.uid[1] = 0;
                 nickname.clear();

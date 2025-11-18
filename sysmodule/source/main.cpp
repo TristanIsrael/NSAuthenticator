@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "utils.h"
 #include "monitor.h"
+#include "gui/gui_controller.h"
 
 using namespace alefbet::authenticator::logger;
 
@@ -14,12 +15,15 @@ using namespace alefbet::authenticator::logger;
 extern "C" {
 #endif
 
-    constexpr size_t TotalHeapSize = ams::util::AlignUp(1_MB, ams::os::MemoryHeapUnitSize);
+    constexpr size_t TotalHeapSize = ams::util::AlignUp(6_MB, ams::os::MemoryHeapUnitSize);
 
     constexpr size_t ThreadMonitorStackRequiredSizeBytes = ams::util::AlignUp(256_KB, 128);
-    constexpr size_t ThreadMonitorStackRequiredSizeAligned = ams::util::AlignUp(ThreadMonitorStackRequiredSizeBytes, ams::os::MemoryPageSize);
-    
+    constexpr size_t ThreadMonitorStackRequiredSizeAligned = ams::util::AlignUp(ThreadMonitorStackRequiredSizeBytes, ams::os::MemoryPageSize);    
     alignas(ams::os::MemoryPageSize) constinit u8 g_thread_monitor_memory[ThreadMonitorStackRequiredSizeAligned];
+
+    constexpr size_t ThreadGuiStackRequiredSizeBytes = ams::util::AlignUp(256_KB, 128);
+    constexpr size_t ThreadGuiStackRequiredSizeAligned = ams::util::AlignUp(ThreadGuiStackRequiredSizeBytes, ams::os::MemoryPageSize);    
+    alignas(ams::os::MemoryPageSize) constinit u8 g_thread_gui_memory[ThreadGuiStackRequiredSizeAligned];
 
     // Minimize fs resource usage
     u32 __nx_fsdev_direntry_cache_size = 1;
@@ -61,7 +65,14 @@ extern "C" {
         rc = fsInitialize();
         if (R_FAILED(rc))
             fatalThrow(MAKERESULT(Module_HomebrewLoader, 2));
-                                        
+                           
+        if (hosversionAtLeast(16,0,0)) {
+            plInitialize(PlServiceType_User);
+        } else {
+            plInitialize(PlServiceType_System);
+        }
+
+        hidInitialize();
         pmdmntInitialize();
         nsInitialize();        
     }
@@ -97,7 +108,8 @@ extern "C" {
 namespace alefbet::authenticator {
 
     void startMonitor(void* args) {
-        alefbet::authenticator::srv::Monitor* monitor = new alefbet::authenticator::srv::Monitor;
+        GuiController* gui = static_cast<GuiController*>(args);
+        alefbet::authenticator::srv::Monitor* monitor = new alefbet::authenticator::srv::Monitor(gui);
         logToFile("@monitor=%p\n", monitor);
 
         // Start monitoring
@@ -105,6 +117,14 @@ namespace alefbet::authenticator {
 
         // Start loop
         monitor->loop();
+    }
+
+    void startGui(void* args) {
+        GuiController* gui = static_cast<GuiController*>(args);
+        logToFile("@gui=%p\n", gui);
+        
+        gui->init();
+        gui->start();
     }
 
 }
@@ -121,12 +141,29 @@ int main(int argc, char **argv)
 
     ::Result rc = 0;    
 
-    // Start the monitor        
+    GuiController* gui = new GuiController;
+
+    // Start the GUI thread
+    Thread threadGui;
+    rc = threadCreate(&threadGui, alefbet::authenticator::startGui, gui, g_thread_gui_memory, ThreadGuiStackRequiredSizeAligned, 0x2c, -2);
+    if(R_FAILED(rc)) {
+        logToFile("Could not create the GUI thread, error %i:%i.\n", R_MODULE(rc), R_DESCRIPTION(rc));
+        return 8;
+    }
+
+    rc = threadStart(&threadGui);
+    if(R_FAILED(rc)) {
+        logToFile("Could not start the GUI thread, error %i:%i.\n", R_MODULE(rc), R_DESCRIPTION(rc));
+        return 5;
+    }
+
+    // Start the monitor thread     
     Thread threadMonitor;    
-    rc = threadCreate(&threadMonitor, alefbet::authenticator::startMonitor, NULL, g_thread_monitor_memory, ThreadMonitorStackRequiredSizeAligned, 0x2c, -2);
+    rc = threadCreate(&threadMonitor, alefbet::authenticator::startMonitor, gui, g_thread_monitor_memory, ThreadMonitorStackRequiredSizeAligned, 0x2c, -2);
     if(R_FAILED(rc)) {
         logToFile("Could not create the monitor thread, error %i:%i.\n", R_MODULE(rc), R_DESCRIPTION(rc));
         return 4;
+
     }
     rc = threadStart(&threadMonitor); // Run the monitor's loop
     if(R_FAILED(rc)) {
@@ -137,6 +174,12 @@ int main(int argc, char **argv)
     rc = threadWaitForExit(&threadMonitor);
     if(R_FAILED(rc)) {
         logToFile("Could not wait for the monitor thread to end, error %i:%i.\n", R_MODULE(rc), R_DESCRIPTION(rc));
+        return 7;
+    }
+
+    rc = threadWaitForExit(&threadGui);
+    if(R_FAILED(rc)) {
+        logToFile("Could not wait for the GUI thread to end, error %i:%i.\n", R_MODULE(rc), R_DESCRIPTION(rc));
         return 7;
     }
 

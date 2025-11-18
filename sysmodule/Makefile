@@ -39,9 +39,9 @@ include $(DEVKITPRO)/libnx/switch_rules
 #---------------------------------------------------------------------------------
 TARGET		:=	authenticator
 BUILD		:=	build.nosync
-SOURCES		:=	source 
+SOURCES		:=	source source/gui source/database
 DATA		:=	data
-INCLUDES	:=	source 
+INCLUDES	:=	source source/gui source/database
 APP_VERSION	:=	1.0
 
 #ifeq ($(RELEASE),)

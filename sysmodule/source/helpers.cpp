@@ -89,7 +89,7 @@ namespace alefbet::authenticator::helpers {
         user.uid = uid;
         user.nickname = UserNickname(base.nickname);
         UserUid uidstr = accountUidToString(uid);
-        logToFile("[Helpers] uid=%s, Nickname=%s\n", uidstr.c_str(), user.nickname.c_str());
+        //logToFile("[Helpers] uid=%s, Nickname=%s\n", uidstr.c_str(), user.nickname.c_str());
 
         accountProfileClose(&profile);
         accountExit();
@@ -130,9 +130,9 @@ namespace alefbet::authenticator::helpers {
             accountExit();
             user.nickname = UserNickname("ERR#005");
             return user;
-        } else {
+        } /*else {
             logToFile("[Helpers] accountGetProfile() ok\n");
-        }
+        }*/
 
         rc = accountProfileGet(&profile, &user_data, &base);
         if(R_FAILED(rc)) {
@@ -141,9 +141,9 @@ namespace alefbet::authenticator::helpers {
             accountExit();
             user.nickname = UserNickname("ERR#006");
             return user;
-        } else {
+        } /*else {
             logToFile("[Helpers] accountProfileGet() ok\n");
-        }
+        }*/
         
         user.nickname = UserNickname(base.nickname);
         logToFile("[Helpers] uid=%i:%i, Nickname=%s\n", user.uid.uid[0], user.uid.uid[1], user.nickname.c_str());
