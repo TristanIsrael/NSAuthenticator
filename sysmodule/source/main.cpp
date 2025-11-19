@@ -15,13 +15,13 @@ using namespace alefbet::authenticator::logger;
 extern "C" {
 #endif
 
-    constexpr size_t TotalHeapSize = ams::util::AlignUp(6_MB, ams::os::MemoryHeapUnitSize);
+    constexpr size_t TotalHeapSize = ams::util::AlignUp(2500_KB, ams::os::MemoryHeapUnitSize);
 
-    constexpr size_t ThreadMonitorStackRequiredSizeBytes = ams::util::AlignUp(256_KB, 128);
+    constexpr size_t ThreadMonitorStackRequiredSizeBytes = ams::util::AlignUp(64_KB, 128);
     constexpr size_t ThreadMonitorStackRequiredSizeAligned = ams::util::AlignUp(ThreadMonitorStackRequiredSizeBytes, ams::os::MemoryPageSize);    
     alignas(ams::os::MemoryPageSize) constinit u8 g_thread_monitor_memory[ThreadMonitorStackRequiredSizeAligned];
 
-    constexpr size_t ThreadGuiStackRequiredSizeBytes = ams::util::AlignUp(256_KB, 128);
+    constexpr size_t ThreadGuiStackRequiredSizeBytes = ams::util::AlignUp(64_KB, 128);
     constexpr size_t ThreadGuiStackRequiredSizeAligned = ams::util::AlignUp(ThreadGuiStackRequiredSizeBytes, ams::os::MemoryPageSize);    
     alignas(ams::os::MemoryPageSize) constinit u8 g_thread_gui_memory[ThreadGuiStackRequiredSizeAligned];
 
@@ -72,7 +72,8 @@ extern "C" {
             plInitialize(PlServiceType_System);
         }
 
-        hidInitialize();
+        //hidInitialize();
+        //hidsysInitialize();
         pmdmntInitialize();
         nsInitialize();        
     }
@@ -84,7 +85,7 @@ extern "C" {
         __builtin_unreachable();
     }
 
-    void testMemory() {
+    /*void testMemory() {
         int on_stack = 0;
         int* on_heap = new int(0);
 
@@ -92,7 +93,7 @@ extern "C" {
         extern char* fake_heap_end;
 
         //Memory allocation test
-        /*for(int s = 0x1000 ; s <= 0x150000 ; s += 5000) {
+        for(int s = 0x1000 ; s <= 0x150000 ; s += 5000) {
             void* ptr = aligned_alloc(0x1000, s);
             if(ptr != nullptr) {
                 logToFile("Allocation of %i bytes succeeded. @ptr=%p\n", s, (void*)ptr);
@@ -101,8 +102,8 @@ extern "C" {
                 logToFile("Allocation of %i bytes failed\n", s);    
                 break;                                            
             }            
-        } */
-    }
+        } 
+    }*/
 }
 
 namespace alefbet::authenticator {

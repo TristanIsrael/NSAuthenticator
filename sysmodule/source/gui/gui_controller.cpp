@@ -27,7 +27,7 @@ void GuiController::init() {
 }
 
 void GuiController::start() {
-    logToFile("[Gui] starting loop\n");
+    logToFile("[Gui] starting loop\n");    
 
     while(true) {
         if(visible_) {
@@ -39,8 +39,8 @@ void GuiController::start() {
             
             verifyUserInput();
         }
-        
-        svcSleepThread(100'000'000); // Wait 100 ms
+                
+        svcSleepThread(20'000'000); // Wait 20 ms
     }
 
     logToFile("[Gui] loop ended\n");
@@ -60,6 +60,8 @@ void GuiController::showAuthenticationPanel() {
     visible_ = true;
     needsRefresh_ = true;
 
+    hidInitialize();
+    hidsysInitialize();
     initUserInput();
     requestForeground(true);
 }   
@@ -111,6 +113,8 @@ int GuiController::calculateTextWidth(const std::string& text, int fontSize, boo
 }
 
 void GuiController::hideAll() {
+    requestForeground(false);
+
     auto& renderer = Renderer::get();    
     if(!renderer.isInitialized()) return;
 
@@ -120,6 +124,9 @@ void GuiController::hideAll() {
     // We need to free all video resources
     renderer.exit();
     visible_ = false;
+
+    hidsysExit();
+    hidExit();
 }
 
 void GuiController::showOverlay(u16 width, u16 height, u16 posX, u16 posY) {
@@ -156,17 +163,25 @@ Result GuiController::hidsysEnableAppletToGetInput(bool enable, u64 aruid) {
 void GuiController::requestForeground(bool enabled) {
     u64 applicationAruid = 0, appletAruid = 0;
 
+    //logToFile("[Gui] Request foreground\n");
+    Result rc = 0;
     for (u64 programId = 0x0100000000001000UL; programId < 0x0100000000001020UL; programId++) {
-        pmdmntGetProcessId(&appletAruid, programId);
+        rc = pmdmntGetProcessId(&appletAruid, programId);
+        //logToFile("[Gui] programId=%i, appletAruid=%i, result=%i:%i\n", programId, appletAruid, R_MODULE(rc), R_DESCRIPTION(rc));
 
-        if (appletAruid != 0)
-            hidsysEnableAppletToGetInput(!enabled, appletAruid);
+        if (appletAruid != 0) {
+            rc = hidsysEnableAppletToGetInput(!enabled, appletAruid);
+            //logToFile("[Gui] hidsysEnableAppletToGetInput -> false, result=%i:%i\n", R_MODULE(rc), R_DESCRIPTION(rc));
+        }
     }
 
-    pmdmntGetApplicationProcessId(&applicationAruid);
-    hidsysEnableAppletToGetInput(!enabled, applicationAruid);
+    rc = pmdmntGetApplicationProcessId(&applicationAruid);
+    //logToFile("[Gui] pmdmntGetApplicationProcessId, applicationAruid=%i, result=%i:%i\n", applicationAruid, R_MODULE(rc), R_DESCRIPTION(rc));
+    rc = hidsysEnableAppletToGetInput(!enabled, applicationAruid);
+    //logToFile("[Gui] hidsysEnableAppletToGetInput -> false, applicationAruid=%i, result=%i:%i\n", applicationAruid, R_MODULE(rc), R_DESCRIPTION(rc));
 
-    hidsysEnableAppletToGetInput(true, 0);
+    rc = hidsysEnableAppletToGetInput(true, 0);
+    //logToFile("[Gui] hidsysEnableAppletToGetInput -> true (0), result=%i:%i\n", R_MODULE(rc), R_DESCRIPTION(rc));
 }
 
 void GuiController::initUserInput() {
@@ -186,8 +201,8 @@ void GuiController::initUserInput() {
     padInitialize(&pad_handheld_, HidNpadIdType_Handheld);
     
     // Touch screen init
-    // hidInitializeTouchScreen();
-    
+    //hidInitializeTouchScreen();
+
     // Clear any stale input from both controllers
     padUpdate(&pad_p1_);
     padUpdate(&pad_handheld_);
