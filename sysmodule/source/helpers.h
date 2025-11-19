@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <switch.h>
+#include <vector>
 
 namespace alefbet::authenticator {
 
@@ -43,6 +44,9 @@ namespace alefbet::authenticator {
         std::string getApplicationName(u64 title_id);
 
         std::string today();
+
+        std::string encodePassword(const std::vector<u64>&);
+        std::vector<u64> decodePassword(const std::string&);
 
         //bool shutdown();
         #ifdef CAN_REBOOT_TO_PAYLOAD

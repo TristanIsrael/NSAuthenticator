@@ -231,6 +231,19 @@ namespace alefbet::authenticator::helpers {
         return std::string(buffer);
     }
 
+    std::string encodePassword(const std::vector<u64>& password) {
+        std::string pin;
+
+        if(password.size() != 4) {
+            logToFile("[Helpers] The PIN size is wrong.");
+            return pin;
+        }
+
+        pin = std::to_string(password[0]) +"," +std::to_string(password[1]) +"," +std::to_string(password[2]) +"," +std::to_string(password[3]);        
+
+        return pin;    
+    }
+
 #ifdef CAN_REBOOT_TO_PAYLOAD
     static FsFileSystem sdmc;
     

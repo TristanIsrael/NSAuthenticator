@@ -13,5 +13,5 @@ namespace alefbet::authenticator::database {
 
     /* Data management */    
     Passwords loadPasswords();
-    void savePassword(AccountUid account, Password password);
+    void savePassword(UserUid account, Password password);
 }

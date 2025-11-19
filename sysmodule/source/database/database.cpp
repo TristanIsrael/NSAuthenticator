@@ -130,7 +130,7 @@ namespace alefbet::authenticator::database {
         return passwords;
     }
 
-    void savePassword(AccountUid account, Password password)
+    void savePassword(UserUid account, Password newPassword)
     {
         const auto& passwords = loadPasswords();
         
@@ -142,13 +142,13 @@ namespace alefbet::authenticator::database {
         for(const auto& [uid, password]: passwords) {
             json j_entry = json::object( {
                 { "uid", uid },                
-                { "password", password }
+                { "password", uid == account ? newPassword : password }
             });
 
             j_entries.push_back(j_entry);
         }
 
-        json j_history = json{
+        json j_passwords = json{
             { "passwords", j_entries }
         };
         
@@ -168,10 +168,11 @@ namespace alefbet::authenticator::database {
             return;
         }
 
-        const auto data = j_history.dump();
+        const auto data = j_passwords.dump();
         const auto s_data = data.c_str();
+        logToFile("[Database] Save passwords: %s\n", s_data);
 
-        logToFile("[Database] Writing sessions data %s (size=%i)\n", s_data, std::strlen(s_data));
+        logToFile("[Database] Writing passwords data %s (size=%i)\n", s_data, std::strlen(s_data));
         if(R_FAILED(fsFileWrite(&handle_database, 0, s_data, std::strlen(s_data), FsWriteOption_Flush))) {
             logToFile("[Database] Could not write into database file\n");
         }

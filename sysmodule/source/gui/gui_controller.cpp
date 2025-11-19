@@ -4,6 +4,7 @@
 #include "utils.h"
 #include "helpers.h"
 #include "database/database.h"
+#include <mutex>
 
 using namespace alefbet::authenticator::logger;
 using namespace alefbet::authenticator::gfx;
@@ -14,12 +15,26 @@ constexpr Color textColor =         Color(0xf, 0xf, 0xf, 0xf);    // White
 constexpr Color circleColor =       Color(0xf, 0xf, 0xf, 0xf);    // White
 constexpr Color backgroundColor =   Color(0x2, 0x4, 0x6, 0xe);    // Deep blue
 constexpr Color titleColor =        Color(0x1, 0xc, 0xe, 0xf);    // Light blue
+constexpr Color errorColor =        Color(0xf, 0x0, 0x0, 0xf);    // Plain red
+constexpr Color successColor =      Color(0x0, 0xf, 0xd, 0xf);    // Green
+
+static std::mutex s_mutexVisible;
 
 /* There should only be a single transfer memory (for nv). */
 alignas(ams::os::MemoryPageSize) constinit u8 g_nv_transfer_memory[0x40000];
 extern "C" ::Result __nx_nv_create_tmem(TransferMemory *t, u32 *out_size, Permission perm) {
     *out_size = sizeof(g_nv_transfer_memory);
     return tmemCreateFromMemory(t, g_nv_transfer_memory, sizeof(g_nv_transfer_memory), perm);
+}
+
+void GuiController::setVisible(bool visible) {
+    std::lock_guard<std::mutex> mutex(s_mutexVisible);
+    visible_ = visible;
+}
+
+bool GuiController::isVisible() const {
+    std::lock_guard<std::mutex> mutex(s_mutexVisible);
+    return visible_;
 }
 
 void GuiController::init() {
@@ -29,10 +44,9 @@ void GuiController::init() {
 void GuiController::start() {
     logToFile("[Gui] starting loop\n");    
 
-    while(true) {
-        if(visible_) {
-            
-            if(needsRefresh_) {
+    while(true) {        
+        if(isVisible()) {
+            if(needsRefresh_) {                    
                 refreshPanel();
                 needsRefresh_ = false;
             }
@@ -40,7 +54,7 @@ void GuiController::start() {
             verifyUserInput();
         }
                 
-        svcSleepThread(20'000'000); // Wait 20 ms
+        svcSleepThread(100'000'000); // Wait 20 ms
     }
 
     logToFile("[Gui] loop ended\n");
@@ -49,6 +63,19 @@ void GuiController::start() {
 void GuiController::showAuthenticationPanel() {        
     logToFile("[Gui] Show authentication panel\n");
 
+    keysDown_.clear();
+    enteredPin_.clear();
+    user_.clear();
+
+    // Verify whether a PIN has been set for the user
+    user_ = getCurrentUser();
+    auto passwords = loadPasswords();
+    const auto& uid = accountUidToString(user_.uid);
+    const auto& password = passwords[uid];
+    
+    // If there is no password for the user we need a setup
+    pinStage_ = password.empty() ? PinSetup : PinVerification;
+    
     width_ = 1216; // Width must be a multiple of 64
     height_ = 768;
 
@@ -57,50 +84,75 @@ void GuiController::showAuthenticationPanel() {
 
     showOverlay(width_, height_, posX, posY);    
 
-    visible_ = true;
-    needsRefresh_ = true;
+    setVisible(true);
 
-    hidInitialize();
-    hidsysInitialize();
+    needsRefresh_ = true;
+    
     initUserInput();
     requestForeground(true);
 }   
 
 void GuiController::refreshPanel() {
+    //if(!isVisible()) return;
+
     logToFile("[Gui] refreshing panel\n");
 
     auto& renderer = Renderer::get();
     renderer.startFrame();
+    clearScreen(false);
         
     // Draw the background
     renderer.drawRect(0, 0, width_, height_, backgroundColor);
 
     // Draw the title
-    renderer.drawString("Authentication", false, 384, 116, 62, titleColor);
-
-    // Get the user current password
-    const auto& passwords = loadPasswords();
-
-    const auto& user = getCurrentUser();
-    const auto& uidStr = accountUidToString(user.uid);
+    renderer.drawString("Authentication", false, 384, 116, 62, titleColor);    
     
-    if(!passwords.contains(uidStr)) {
-        // If the user does not already have a code we ask him to create one
-        std::string str = user.nickname + ", please enter a new PIN.";
-        const auto& width = calculateTextWidth(str, 62);
-        renderer.drawString(str.c_str(), false, (width_ - width)/2, 348, 62, textColor);
-    } else {
-        // Otherwise we ask the user password
-        std::string str = user.nickname + ", please enter your PIN.";
-        const auto& width = calculateTextWidth(str, 62);
-        renderer.drawString(str.c_str(), false, (width_ - width)/2, 348, 62, textColor);
+    switch(pinStage_) {
+        case PinSetup: {
+            // If the user does not already have a code we ask him to create one
+            std::string str = user_.nickname + ", please enter a new PIN.";
+            const auto& width = calculateTextWidth(str, 62);
+            renderer.drawString(str.c_str(), false, (width_ - width)/2, 348, 62, textColor);            
+            break;
+        }
+        case PinSetupVerification: {
+            std::string str = "Please re-enter your PIN.";
+            const auto& width = calculateTextWidth(str, 62);
+            renderer.drawString(str.c_str(), false, (width_ - width)/2, 348, 62, textColor);
+            break;
+        }
+        case PinsDontMatch: {
+            std::string str = "The PINs don't match. Try again.";
+            const auto& width = calculateTextWidth(str, 62);
+            renderer.drawString(str.c_str(), false, (width_ - width)/2, 348, 62, errorColor);
+            break;
+        }
+        case PinError: {
+            std::string str = "Wrong PIN.";
+            const auto& width = calculateTextWidth(str, 62);
+            renderer.drawString(str.c_str(), false, (width_ - width)/2, 348, 62, errorColor);
+            break;
+        }
+        case PinOk: {
+            std::string str = "Correct PIN.";
+            const auto& width = calculateTextWidth(str, 62);
+            renderer.drawString(str.c_str(), false, (width_ - width)/2, 348, 62, successColor);
+            break;
+        }
+        case PinVerification: {
+            // Otherwise we ask the user password
+            std::string str = user_.nickname + ", please enter your PIN.";
+            const auto& width = calculateTextWidth(str, 62);
+            renderer.drawString(str.c_str(), false, (width_ - width)/2, 348, 62, textColor);  
+            break;  
+        }
     }
     
     // Draw the circles
-    renderer.drawCircle(416, 496, 24, false, circleColor);
-    renderer.drawCircle(550, 496, 24, false, circleColor);
-    renderer.drawCircle(680, 496, 24, false, circleColor);
-    renderer.drawCircle(818, 496, 24, false, circleColor);
+    renderer.drawCircle(416, 496, 24, keysDown_.size() >= 1, circleColor);
+    renderer.drawCircle(550, 496, 24, keysDown_.size() >= 2, circleColor);
+    renderer.drawCircle(680, 496, 24, keysDown_.size() >= 3, circleColor);
+    renderer.drawCircle(818, 496, 24, keysDown_.size() > 3, circleColor);
 
     renderer.endFrame();    
 }
@@ -113,20 +165,21 @@ int GuiController::calculateTextWidth(const std::string& text, int fontSize, boo
 }
 
 void GuiController::hideAll() {
-    requestForeground(false);
+    setVisible(false);
 
     auto& renderer = Renderer::get();    
     if(!renderer.isInitialized()) return;
+
+    requestForeground(false);
 
     logToFile("[Gui] Hide remaining time panel\n");
     clearScreen();
 
     // We need to free all video resources
-    renderer.exit();
-    visible_ = false;
+    renderer.exit();    
 
     hidsysExit();
-    hidExit();
+    hidExit();    
 }
 
 void GuiController::showOverlay(u16 width, u16 height, u16 posX, u16 posY) {
@@ -137,12 +190,44 @@ void GuiController::showOverlay(u16 width, u16 height, u16 posX, u16 posY) {
     clearScreen();
 }
 
-void GuiController::clearScreen() {
+void GuiController::clearScreen(bool ownFrame) {
     auto& renderer = Renderer::get();
-    renderer.startFrame();
+
+    if(ownFrame) {
+        renderer.startFrame();
+    }
+
     renderer.clearScreen();
-    renderer.endFrame();
+    
+    if(ownFrame) {
+        renderer.endFrame();
+    }
 }
+
+void GuiController::handlePinInput() {
+    // When this function is called it means that a PIN has been entered
+    // There are 2 possibilities:
+    // - This is the new PIN and we have to ask the user to re-enter for verification
+    // - This is the control PIN and we have to verify it
+    if(pinStage_ == PinSetup || pinStage_ == PinsDontMatch) {
+        enteredPin_ = encodePassword(keysDown_);
+        keysDown_.clear();
+        pinStage_ = PinSetupVerification;
+        needsRefresh_ = true;
+    } else if(pinStage_ == PinSetupVerification) {
+        const auto& verifPin = encodePassword(keysDown_);
+        keysDown_.clear();
+        
+        pinStage_ = verifPin == enteredPin_ ? PinOk : PinsDontMatch;
+
+        if(pinStage_ == PinOk) {
+            const auto& uid = accountUidToString(user_.uid);
+            savePassword(uid, verifPin);
+        }
+        
+        needsRefresh_ = true;
+    }
+ }
 
 /**
  * @brief libnx hid:sys shim that gives or takes away frocus to or from the process with the given aruid
@@ -187,6 +272,9 @@ void GuiController::requestForeground(bool enabled) {
 void GuiController::initUserInput() {
     logToFile("[Gui] Initialize user input\n");
 
+    hidInitialize();
+    hidsysInitialize();
+
     // Allow only Player 1 and handheld mode
     HidNpadIdType id_list[2] = { HidNpadIdType_No1, HidNpadIdType_Handheld };
     
@@ -209,6 +297,8 @@ void GuiController::initUserInput() {
 }
 
 void GuiController::verifyUserInput() {
+    if(!visible_) return;  
+    
     padUpdate(&pad_p1_);
     padUpdate(&pad_handheld_);
 
@@ -219,5 +309,12 @@ void GuiController::verifyUserInput() {
 
     if(keysDown != 0) {
         logToFile("[Gui] keysDown=%i\n", keysDown);
+        keysDown_.push_back(keysDown); 
+
+        if(keysDown_.size() == 4) {
+            handlePinInput();
+        }
+
+        needsRefresh_ = true;
     }
 }
